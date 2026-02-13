@@ -1,126 +1,193 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  ThemeProvider,
+  CssBaseline,
+  Container,
+  Box,
+  Typography,
+  Button,
+  CircularProgress,
+  Snackbar,
+  Alert,
+  Paper,
+} from '@mui/material';
+import { AddCircleOutline } from '@mui/icons-material';
+import theme from './theme';
+import TaskList from './components/TaskList';
+import TaskDialog from './components/TaskDialog';
+import TaskFilters from './components/TaskFilters';
+import TaskCounter from './components/TaskCounter';
+import {
+  getTasks,
+  createTask,
+  updateTask,
+  toggleTaskComplete,
+  deleteTask,
+} from './services/taskService';
+import { FILTER_OPTIONS, SORT_OPTIONS } from './constants';
 import './App.css';
 
 function App() {
-  const [data, setData] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [newItem, setNewItem] = useState('');
+  const [filter, setFilter] = useState(FILTER_OPTIONS.ALL);
+  const [sort, setSort] = useState(SORT_OPTIONS[0].value);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const loadTasks = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/items');
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      const result = await response.json();
-      setData(result);
-      setError(null);
-    } catch (err) {
-      setError('Failed to fetch data: ' + err.message);
-      console.error('Error fetching data:', err);
+      const data = await getTasks({ status: filter, sort });
+      setTasks(data);
+    } catch (error) {
+      showSnackbar('Failed to load tasks: ' + error.message, 'error');
     } finally {
       setLoading(false);
     }
+  }, [filter, sort]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!newItem.trim()) return;
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
 
+  const handleAddTask = () => {
+    setEditingTask(null);
+    setDialogOpen(true);
+  };
+
+  const handleEditTask = (task) => {
+    setEditingTask(task);
+    setDialogOpen(true);
+  };
+
+  const handleDialogClose = () => {
+    setDialogOpen(false);
+    setEditingTask(null);
+  };
+
+  const handleSaveTask = async (taskData) => {
     try {
-      const response = await fetch('/api/items', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name: newItem }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to add item');
+      if (editingTask) {
+        await updateTask(editingTask.id, taskData);
+        showSnackbar('Task updated successfully');
+      } else {
+        await createTask(taskData);
+        showSnackbar('Task created successfully');
       }
-
-      const result = await response.json();
-      setData([...data, result]);
-      setNewItem('');
-    } catch (err) {
-      setError('Error adding item: ' + err.message);
-      console.error('Error adding item:', err);
+      handleDialogClose();
+      loadTasks();
+    } catch (error) {
+      showSnackbar(error.message, 'error');
     }
   };
 
-  const handleDelete = async (itemId) => {
+  const handleToggleComplete = async (taskId) => {
     try {
-      const response = await fetch(`/api/items/${itemId}`, {
-        method: 'DELETE',
-      });
+      await toggleTaskComplete(taskId);
+      loadTasks();
+    } catch (error) {
+      showSnackbar('Failed to update task: ' + error.message, 'error');
+    }
+  };
 
-      if (!response.ok) {
-        throw new Error('Failed to delete item');
-      }
-
-      setData(data.filter(item => item.id !== itemId));
-      setError(null);
-    } catch (err) {
-      setError('Error deleting item: ' + err.message);
-      console.error('Error deleting item:', err);
+  const handleDeleteTask = async (taskId) => {
+    try {
+      await deleteTask(taskId);
+      showSnackbar('Task deleted successfully');
+      loadTasks();
+    } catch (error) {
+      showSnackbar('Failed to delete task: ' + error.message, 'error');
     }
   };
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>To Do App</h1>
-        <p>Keep track of your tasks</p>
-      </header>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', py: 4 }}>
+        <Container maxWidth="md">
+          <Paper elevation={0} sx={{ p: 4, bgcolor: 'background.paper', borderRadius: 2 }}>
+            {/* Header */}
+            <Box sx={{ mb: 4, textAlign: 'center' }}>
+              <Typography variant="h3" component="h1" gutterBottom fontWeight={700}>
+                My Tasks
+              </Typography>
+              <Typography variant="body1" color="text.secondary">
+                Keep track of your tasks and stay organized
+              </Typography>
+            </Box>
 
-      <main>
-        <section className="add-item-section">
-          <h2>Add New Item</h2>
-          <form onSubmit={handleSubmit}>
-            <input
-              type="text"
-              value={newItem}
-              onChange={(e) => setNewItem(e.target.value)}
-              placeholder="Enter item name"
+            {/* Add Task Button */}
+            <Box sx={{ mb: 3 }}>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddCircleOutline />}
+                onClick={handleAddTask}
+                fullWidth
+                data-testid="add-task-button"
+              >
+                Add Task
+              </Button>
+            </Box>
+
+            {/* Task Counter */}
+            <TaskCounter tasks={tasks} />
+
+            {/* Filters and Sorting */}
+            <TaskFilters
+              filter={filter}
+              sort={sort}
+              onFilterChange={setFilter}
+              onSortChange={setSort}
             />
-            <button type="submit">Add Item</button>
-          </form>
-        </section>
 
-        <section className="items-section">
-          <h2>Items from Database</h2>
-          {loading && <p>Loading data...</p>}
-          {error && <p className="error">{error}</p>}
-          {!loading && !error && (
-            <ul>
-              {data.length > 0 ? (
-                data.map((item) => (
-                  <li key={item.id}>
-                    <span>{item.name}</span>
-                    <button 
-                      onClick={() => handleDelete(item.id)}
-                      className="delete-btn"
-                      type="button"
-                    >
-                      Delete
-                    </button>
-                  </li>
-                ))
-              ) : (
-                <p>No items found. Add some!</p>
-              )}
-            </ul>
-          )}
-        </section>
-      </main>
-    </div>
+            {/* Task List */}
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <TaskList
+                tasks={tasks}
+                onComplete={handleToggleComplete}
+                onEdit={handleEditTask}
+                onDelete={handleDeleteTask}
+              />
+            )}
+          </Paper>
+        </Container>
+      </Box>
+
+      {/* Task Dialog */}
+      <TaskDialog
+        open={dialogOpen}
+        task={editingTask}
+        onClose={handleDialogClose}
+        onSave={handleSaveTask}
+      />
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </ThemeProvider>
   );
 }
 
