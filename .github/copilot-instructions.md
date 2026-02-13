@@ -11,3 +11,4 @@ The project documentation will be built during the bootcamp sessions.
 - [Project Overview](../docs/project-overview.md) - Overview of the project
 - [Functional Requirements](../docs/functional-requirements.md) - Core functional requirements for the TODO application
 - [UI Guidelines](../docs/ui-guidelines.md) - User interface design standards and component specifications
+- [Testing Guidelines](../docs/testing-guidelines.md) - Testing strategy, standards, and best practices
